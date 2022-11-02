@@ -73,6 +73,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import android.media.RingtoneManager;
 
 class NotificationManager {
   private static final String TAG = "NotificationManager";
@@ -82,6 +83,29 @@ class NotificationManager {
   private static final int NOTIFICATION_TYPE_ALL = 0;
   private static final int NOTIFICATION_TYPE_DISPLAYED = 1;
   private static final int NOTIFICATION_TYPE_TRIGGER = 2;
+
+  private static final VoiceNotificationPlayer voiceNotificationPlayer = new VoiceNotificationPlayer(getApplicationContext());
+
+  private static Uri getSoundUri(String soundName) {
+    if (soundName == null || "default".equalsIgnoreCase(soundName)) {
+      return RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+    } else {
+
+      // sound name can be full filename, or just the resource name.
+      // So the strings 'my_sound.mp3' AND 'my_sound' are accepted
+      // The reason is to make the iOS and android javascript interfaces compatible
+
+      int resId;
+      if (getApplicationContext().getResources().getIdentifier(soundName, "raw", getApplicationContext().getPackageName()) != 0) {
+        resId = getApplicationContext().getResources().getIdentifier(soundName, "raw", getApplicationContext().getPackageName());
+      } else {
+        soundName = soundName.substring(0, soundName.lastIndexOf('.'));
+        resId = getApplicationContext().getResources().getIdentifier(soundName, "raw", getApplicationContext().getPackageName());
+      }
+
+      return Uri.parse("android.resource://" + getApplicationContext().getPackageName() + "/" + resId);
+    }
+  }
 
   private static Task<NotificationCompat.Builder> notificationBundleToBuilder(
       NotificationModel notificationModel) {
@@ -177,17 +201,14 @@ class NotificationManager {
             builder.setNumber(androidModel.getNumber());
           }
 
-          if (androidModel.getSound() != null) {
-            Uri soundUri = ResourceUtils.getSoundUri(androidModel.getSound());
-            if (soundUri != null) {
-              hasCustomSound = true;
-              builder.setSound(soundUri);
-            } else {
-              Logger.w(
-                  TAG,
-                  "Unable to retrieve sound for notification, sound was specified as: "
-                      + androidModel.getSound());
-            }
+          Uri soundUri = getSoundUri(androidModel.getSound());
+
+          if (Objects.nonNull(androidModel.getSound()) && !Objects.equals(androidModel.getSound(), "default")) {
+            hasCustomSound = true;
+            voiceNotificationPlayer.playNotification(androidModel.getSound());
+            builder.setSilent(true);
+          } else {
+            builder.setSilent(false);
           }
 
           builder.setDefaults(androidModel.getDefaults(hasCustomSound));
